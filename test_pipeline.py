@@ -161,7 +161,7 @@ def test_nmf_clustering(test_data):
         all_data, clinical_summaries, demographics, first_acoustic, demographic_stats = test_data
         
         print("  Running NMF clustering (this may take a few minutes)...")
-        all_clusters, all_feature_maps, coef_dists, basis_dists = run_nmf_clustering(
+        all_clusters, all_feature_maps, coef_dists, raw_coef_dists, basis_dists = run_nmf_clustering(
             all_data, clinical_summaries, first_acoustic
         )
         
@@ -185,7 +185,7 @@ def test_nmf_clustering(test_data):
         print(f"  ✓ Top features extracted for both data types")
         
         print("✅ NMF clustering test passed!")
-        return True, (all_clusters, all_feature_maps, coef_dists, basis_dists, top_features_dict)
+        return True, (all_clusters, all_feature_maps, coef_dists, raw_coef_dists, basis_dists, top_features_dict)
         
     except Exception as e:
         print(f"  ❌ NMF clustering failed: {str(e)}")
@@ -214,7 +214,7 @@ def test_visualization(test_data, clustering_data):
         V_scaled = mms.fit_transform(V)
         
         # Create a test plot (but don't save to avoid cluttering)
-        plot_pca_clusters(V_scaled, all_clusters["acoustic"], "acoustic", save_path=None)
+        plot_pca_clusters(V_scaled, all_clusters["acoustic"], "acoustic", save_path=None, original_data=V_scaled, zero_participants=None)
         
         print("  ✓ PCA visualization test completed")
         print("✅ Visualization test passed!")
@@ -234,11 +234,11 @@ def test_cross_modal_analysis(test_data, clustering_data):
         from src.cross_modal_analysis import run_cross_modal_analysis
         
         all_data, clinical_summaries, demographics, first_acoustic, demographic_stats = test_data
-        all_clusters, all_feature_maps, coef_dists, basis_dists, top_features_dict = clustering_data
+        all_clusters, all_feature_maps, coef_dists, raw_coef_dists, basis_dists, top_features_dict = clustering_data
         
         print("  Running cross-modal analysis...")
         analysis_results, similarity_metrics = run_cross_modal_analysis(
-            all_clusters, all_feature_maps, coef_dists, clinical_summaries
+            all_clusters, all_feature_maps, coef_dists, clinical_summaries, raw_coef_dists
         )
         
         print(f"  ✓ Cluster mappings computed")

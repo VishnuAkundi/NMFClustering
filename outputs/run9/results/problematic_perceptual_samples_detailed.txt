@@ -1,0 +1,132 @@
+PROBLEMATIC PERCEPTUAL SAMPLES ANALYSIS
+==================================================
+
+Total samples analyzed: 76
+Samples with ALL coefficients < 1e-15: 20
+Samples with sum < 1e-10: 20
+
+SAMPLES WITH ALL COEFFICIENTS ~= 2.22E-16:
+----------------------------------------
+Sample: Sample_6
+Participant ID: TIBD106
+Coefficients: ['2.22e-16', '2.22e-16', '2.22e-16', '2.22e-16']
+Sum: 8.88e-16
+
+Sample: Sample_7
+Participant ID: TIBD112
+Coefficients: ['2.22e-16', '2.22e-16', '2.22e-16', '2.22e-16']
+Sum: 8.88e-16
+
+Sample: Sample_10
+Participant ID: MIBD09
+Coefficients: ['2.22e-16', '2.22e-16', '2.22e-16', '2.22e-16']
+Sum: 8.88e-16
+
+Sample: Sample_15
+Participant ID: MIBD36
+Coefficients: ['2.22e-16', '2.22e-16', '2.22e-16', '2.22e-16']
+Sum: 8.88e-16
+
+Sample: Sample_16
+Participant ID: MIBD37
+Coefficients: ['2.22e-16', '2.22e-16', '2.22e-16', '2.22e-16']
+Sum: 8.88e-16
+
+Sample: Sample_17
+Participant ID: MIBD40
+Coefficients: ['2.22e-16', '2.22e-16', '2.22e-16', '2.22e-16']
+Sum: 8.88e-16
+
+Sample: Sample_20
+Participant ID: MIBD47
+Coefficients: ['2.22e-16', '2.22e-16', '2.22e-16', '2.22e-16']
+Sum: 8.88e-16
+
+Sample: Sample_24
+Participant ID: TIBD03
+Coefficients: ['2.22e-16', '2.22e-16', '2.22e-16', '2.22e-16']
+Sum: 8.88e-16
+
+Sample: Sample_25
+Participant ID: TIBD06
+Coefficients: ['2.22e-16', '2.22e-16', '2.22e-16', '2.22e-16']
+Sum: 8.88e-16
+
+Sample: Sample_35
+Participant ID: TIBD29
+Coefficients: ['2.22e-16', '2.22e-16', '2.22e-16', '2.22e-16']
+Sum: 8.88e-16
+
+Sample: Sample_41
+Participant ID: TIBD42
+Coefficients: ['2.22e-16', '2.22e-16', '2.22e-16', '2.22e-16']
+Sum: 8.88e-16
+
+Sample: Sample_46
+Participant ID: TIBD48
+Coefficients: ['2.22e-16', '2.22e-16', '2.22e-16', '2.22e-16']
+Sum: 8.88e-16
+
+Sample: Sample_52
+Participant ID: TIBD54
+Coefficients: ['2.22e-16', '2.22e-16', '2.22e-16', '2.22e-16']
+Sum: 8.88e-16
+
+Sample: Sample_56
+Participant ID: TIBD59
+Coefficients: ['2.22e-16', '2.22e-16', '2.22e-16', '2.22e-16']
+Sum: 8.88e-16
+
+Sample: Sample_59
+Participant ID: TIBD65
+Coefficients: ['2.22e-16', '2.22e-16', '2.22e-16', '2.22e-16']
+Sum: 8.88e-16
+
+Sample: Sample_63
+Participant ID: TIBD69
+Coefficients: ['2.22e-16', '2.22e-16', '2.22e-16', '2.22e-16']
+Sum: 8.88e-16
+
+Sample: Sample_67
+Participant ID: TIBD73
+Coefficients: ['2.22e-16', '2.22e-16', '2.22e-16', '2.22e-16']
+Sum: 8.88e-16
+
+Sample: Sample_68
+Participant ID: TIBD74
+Coefficients: ['2.22e-16', '2.22e-16', '2.22e-16', '2.22e-16']
+Sum: 8.88e-16
+
+Sample: Sample_71
+Participant ID: TIBD81
+Coefficients: ['2.22e-16', '2.22e-16', '2.22e-16', '2.22e-16']
+Sum: 8.88e-16
+
+Sample: Sample_74
+Participant ID: TIBD91
+Coefficients: ['2.22e-16', '2.22e-16', '2.22e-16', '2.22e-16']
+Sum: 8.88e-16
+
+
+PARTICIPANT IDs TO EXCLUDE:
+------------------------------
+TIBD106
+TIBD112
+MIBD09
+MIBD36
+MIBD37
+MIBD40
+MIBD47
+TIBD03
+TIBD06
+TIBD29
+TIBD42
+TIBD48
+TIBD54
+TIBD59
+TIBD65
+TIBD69
+TIBD73
+TIBD74
+TIBD81
+TIBD91

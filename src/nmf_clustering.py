@@ -9,6 +9,7 @@ from kneed import KneeLocator
 import nimfa
 from typing import Tuple, Dict, Any
 from .config import *
+from . import config
 
 
 def perform_nmf_analysis(data: np.ndarray, data_type: str) -> Tuple[Any, Any, int]:
@@ -55,10 +56,12 @@ def perform_nmf_analysis(data: np.ndarray, data_type: str) -> Tuple[Any, Any, in
     print(f"Optimal components = {optimal_components}")
     
     # Re-fit using optimal number of components
+    print('DEBUG: Data input shape:', data.T.shape)
     nmf = nimfa.Nmf(data.T, rank=optimal_components, max_iter=NMF_MAX_ITER, seed=NMF_SEED)
     fit = nmf()
     basis = fit.fit.basis()  # features
     coef = fit.fit.coef()  # individual clusters
+    print(f"DEBUG: Basis shape: {basis.shape}, Coefficient shape: {coef.shape}")
     
     # Validate NMF fit
     V_hat = np.dot(basis, coef)
@@ -75,7 +78,7 @@ def perform_nmf_analysis(data: np.ndarray, data_type: str) -> Tuple[Any, Any, in
 
 
 def extract_clusters_and_features(basis: np.ndarray, coef: np.ndarray, 
-                                columns: pd.Index, data_type: str) -> Tuple[np.ndarray, pd.DataFrame, np.ndarray]:
+                                columns: pd.Index, data_type: str) -> Tuple[np.ndarray, pd.DataFrame, np.ndarray, np.ndarray]:
     """
     Extract cluster assignments and feature mappings from NMF results.
     
@@ -86,22 +89,78 @@ def extract_clusters_and_features(basis: np.ndarray, coef: np.ndarray,
         data_type: Type of data ("acoustic" or "perceptual")
         
     Returns:
-        Tuple of (clusters, features_dataframe, coefficient_distributions)
+        Tuple of (clusters, features_dataframe, coefficient_distributions, raw_coefficients)
     """
     # Map basis and coefficient matrices to feature weights and cluster indices
     features = np.array(np.argmax(basis, axis=1))
     features_df = pd.DataFrame(data=features, index=columns)
     clusters = np.array(np.argmax(coef, axis=0))
     
+    # Store raw coefficients for column similarity method (before softmax)
+    raw_coef = coef.copy()
+    
     # Calculate coefficient distributions (softmax)
     coef_dist = np.exp(coef) / np.sum(np.exp(coef), axis=0)
     
     # Save feature weights
-    output_path = f"{RESULTS_DIR}/feature_weights_{data_type}.csv"
+    output_path = f"{config.RESULTS_DIR}/feature_weights_{data_type}.csv"
     features_df.to_csv(output_path)
     print(f"Feature weights saved to: {output_path}")
     
-    return clusters, features_df, coef_dist
+    # Save raw NMF matrices
+    # Save basis matrix (H) - features x components
+    basis_path = f"{config.RESULTS_DIR}/nmf_basis_matrix_{data_type}.csv"
+    basis_df = pd.DataFrame(basis, index=columns, columns=[f'Component_{i}' for i in range(basis.shape[1])])
+    basis_df.to_csv(basis_path)
+    print(f"NMF basis matrix (H) saved to: {basis_path}")
+    
+    # Save coefficient matrix (W) - components x samples  
+    coef_path = f"{config.RESULTS_DIR}/nmf_coefficient_matrix_{data_type}.csv"
+    coef_df = pd.DataFrame(coef, index=[f'Component_{i}' for i in range(coef.shape[0])], 
+                          columns=[f'Sample_{i}' for i in range(coef.shape[1])])
+    coef_df.to_csv(coef_path)
+    print(f"NMF coefficient matrix (W) saved to: {coef_path}")
+    
+    return clusters, features_df, coef_dist, raw_coef
+
+
+def determine_optimal_features(feature_scores: np.ndarray, cluster_idx: int) -> int:
+    """
+    Determine optimal number of features using Kneedle algorithm.
+    
+    Args:
+        feature_scores: Array of feature importance scores (sorted descending)
+        cluster_idx: Cluster index (for debugging output)
+        
+    Returns:
+        Optimal number of features to select
+    """
+    if len(feature_scores) < 3:
+        return len(feature_scores)
+    
+    # Create x-axis (feature indices)
+    x = np.arange(len(feature_scores))
+    
+    try:
+        # Use KneeLocator to find the elbow point
+        kneedle = KneeLocator(
+            x, feature_scores, 
+            curve="convex", 
+            direction="decreasing",
+            online=True
+        )
+        
+        optimal_n = kneedle.elbow if kneedle.elbow is not None else min(5, len(feature_scores))
+        
+        # Ensure we get at least 2 features and at most 10
+        optimal_n = max(2, min(optimal_n + 1, min(10, len(feature_scores))))
+        
+        print(f"    Kneedle selected {optimal_n} features for cluster {cluster_idx}")
+        return optimal_n
+        
+    except Exception as e:
+        print(f"    Kneedle failed for cluster {cluster_idx}: {e}, defaulting to 5 features")
+        return min(5, len(feature_scores))
 
 
 def get_top_features(basis: np.ndarray, columns: pd.Index, data_type: str) -> Dict:
@@ -122,7 +181,16 @@ def get_top_features(basis: np.ndarray, columns: pd.Index, data_type: str) -> Di
     print(f"\nTop features for {data_type} data:")
     for cluster_idx in range(basis_df.shape[1]):
         # Sort features by importance in descending order
-        top_features = basis_df.iloc[:, cluster_idx].nlargest(TOP_N_FEATURES)
+        sorted_features = basis_df.iloc[:, cluster_idx].sort_values(ascending=False)
+        
+        # Determine number of features to select
+        if isinstance(TOP_N_FEATURES, str) and TOP_N_FEATURES.lower() == "kneedle":
+            n_features = determine_optimal_features(sorted_features.values, cluster_idx)
+        else:
+            n_features = min(int(TOP_N_FEATURES), len(sorted_features))
+        
+        # Get top N features
+        top_features = sorted_features.head(n_features)
         
         # Store in dictionary
         top_features_per_cluster[cluster_idx] = {
@@ -131,7 +199,7 @@ def get_top_features(basis: np.ndarray, columns: pd.Index, data_type: str) -> Di
         }
         
         # Display feature names and scores
-        print(f"\nCluster {cluster_idx}:")
+        print(f"\nCluster {cluster_idx} (selected {n_features} features):")
         for feature, score in zip(top_features.index, top_features.values):
             print(f"  {feature}: {score:.4f}")
     
@@ -139,7 +207,7 @@ def get_top_features(basis: np.ndarray, columns: pd.Index, data_type: str) -> Di
 
 
 def run_nmf_clustering(all_data: pd.DataFrame, clinical_summaries: pd.DataFrame, 
-                      first_acoustic: int) -> Tuple[Dict, Dict, Dict, Dict, pd.DataFrame]:
+                      first_acoustic: int) -> Tuple[Dict, Dict, Dict, Dict, Dict, pd.DataFrame]:
     """
     Run complete NMF clustering analysis for both acoustic and perceptual data.
     
@@ -149,11 +217,12 @@ def run_nmf_clustering(all_data: pd.DataFrame, clinical_summaries: pd.DataFrame,
         first_acoustic: Index of first acoustic feature
         
     Returns:
-        Tuple of (all_clusters, all_feature_maps, coef_dists, basis_dists, clinical_summaries_filtered)
+        Tuple of (all_clusters, all_feature_maps, coef_dists, raw_coef_dists, basis_dists, clinical_summaries_filtered)
     """
     all_clusters = {}
     all_feature_maps = {}
     coef_dists = {}
+    raw_coef_dists = {}
     basis_dists = {}
     
     # Filter clinical summaries to match all_data participants (do this once at the start)
@@ -182,7 +251,7 @@ def run_nmf_clustering(all_data: pd.DataFrame, clinical_summaries: pd.DataFrame,
         basis, coef, optimal_components = perform_nmf_analysis(V_scaled, data_type)
         
         # Extract clusters and features
-        clusters, features_df, coef_dist = extract_clusters_and_features(
+        clusters, features_df, coef_dist, raw_coef = extract_clusters_and_features(
             basis, coef, columns, data_type
         )
         
@@ -193,8 +262,9 @@ def run_nmf_clustering(all_data: pd.DataFrame, clinical_summaries: pd.DataFrame,
         all_clusters[data_type] = clusters
         all_feature_maps[data_type] = features_df
         coef_dists[data_type] = coef_dist
+        raw_coef_dists[data_type] = raw_coef
         basis_dists[data_type] = basis
         
         print(f"Completed {data_type} analysis with {optimal_components} clusters")
     
-    return all_clusters, all_feature_maps, coef_dists, basis_dists, clinical_summaries_filtered
+    return all_clusters, all_feature_maps, coef_dists, raw_coef_dists, basis_dists, clinical_summaries_filtered

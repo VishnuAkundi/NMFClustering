@@ -8,6 +8,7 @@ import json
 import os
 from typing import Dict, Any
 from .config import *
+from . import config
 
 
 def save_demographic_stats(demographic_stats: Dict, save_path: str) -> None:
@@ -141,15 +142,54 @@ def save_cross_modal_results(analysis_results: Dict, similarity_metrics: Dict,
     print(f"Severity statistics saved: {severity_path}")
     
     # Save acoustic-to-perceptual mapping
-    mapping_df = pd.DataFrame([
-        {'Acoustic_Cluster': k, 'Perceptual_Cluster': v} 
-        for k, v in analysis_results['acoustic_to_perceptual_mapping'].items()
-    ])
+    mapping_data = []
+    for k, v in analysis_results['acoustic_to_perceptual_mapping'].items():
+        mapping_entry = {'Acoustic_Cluster': k, 'Perceptual_Cluster': v}
+        
+        # Add similarity score if using column similarity method
+        if 'similarity_matrix' in analysis_results:
+            similarity_matrix = analysis_results['similarity_matrix']
+            mapping_entry['Similarity_Score'] = similarity_matrix[k, v]
+            
+        mapping_data.append(mapping_entry)
+    
+    mapping_df = pd.DataFrame(mapping_data)
     mapping_path = f"{save_dir}/acoustic_perceptual_mapping.csv"
     mapping_df.to_csv(mapping_path, index=False)
     print(f"Acoustic-perceptual mapping saved: {mapping_path}")
     
-    # Save similarity metrics
+    # Save method-specific results
+    alignment_method = analysis_results.get('alignment_method', 'jsd_hungarian')
+    
+    if alignment_method == 'column_similarity' and 'similarity_matrix' in analysis_results:
+        # Save full similarity matrix
+        similarity_matrix = analysis_results['similarity_matrix']
+        similarity_df = pd.DataFrame(
+            similarity_matrix,
+            index=[f'Acoustic_{i}' for i in range(similarity_matrix.shape[0])],
+            columns=[f'Perceptual_{j}' for j in range(similarity_matrix.shape[1])]
+        )
+        
+        similarity_metric = analysis_results.get('similarity_metric', 'cosine')
+        similarity_matrix_path = f"{save_dir}/full_similarity_matrix_{similarity_metric}.csv"
+        similarity_df.to_csv(similarity_matrix_path)
+        print(f"Full similarity matrix saved: {similarity_matrix_path}")
+        
+        # Save similarity matrix metadata
+        metadata = {
+            'alignment_method': alignment_method,
+            'similarity_metric': similarity_metric,
+            'matrix_shape': similarity_matrix.shape,
+            'matrix_range': [float(similarity_matrix.min()), float(similarity_matrix.max())],
+            'description': f"C[i,j] = {similarity_metric} similarity between acoustic component i and perceptual component j, computed over shared patients"
+        }
+        
+        metadata_path = f"{save_dir}/similarity_matrix_metadata_{similarity_metric}.json"
+        with open(metadata_path, 'w') as f:
+            json.dump(metadata, f, indent=2)
+        print(f"Similarity matrix metadata saved: {metadata_path}")
+    
+    # Save similarity metrics (patient-level similarities)
     similarity_df = pd.DataFrame({
         'Participant_Index': range(len(similarity_metrics['js_divergences'])),
         'JS_Divergence': similarity_metrics['js_divergences'],
@@ -190,6 +230,29 @@ def save_summary_report(analysis_results: Dict, similarity_metrics: Dict,
     report.append(f"Perceptual clusters: {len(combined_clusters['perceptual'].unique())}")
     report.append("")
     
+    # Analysis method summary
+    alignment_method = analysis_results.get('alignment_method', 'jsd_hungarian')
+    report.append("ANALYSIS METHOD:")
+    report.append(f"Alignment method: {alignment_method}")
+    
+    if alignment_method == 'column_similarity':
+        similarity_metric = analysis_results.get('similarity_metric', 'cosine')
+        report.append(f"Similarity metric: {similarity_metric}")
+        
+        if 'similarity_matrix' in analysis_results:
+            similarity_matrix = analysis_results['similarity_matrix']
+            report.append(f"Similarity matrix shape: {similarity_matrix.shape}")
+            report.append(f"Similarity range: [{similarity_matrix.min():.4f}, {similarity_matrix.max():.4f}]")
+            
+            # Report optimal mapping scores
+            mapping = analysis_results['acoustic_to_perceptual_mapping']
+            if len(mapping) == similarity_matrix.shape[0] and len(set(mapping.values())) == len(mapping.values()):
+                total_similarity = sum(similarity_matrix[k, v] for k, v in mapping.items())
+                avg_similarity = total_similarity / len(mapping)
+                report.append(f"Average optimal alignment similarity: {avg_similarity:.4f}")
+    
+    report.append("")
+    
     # Demographic statistics
     report.append("DEMOGRAPHIC STATISTICS:")
     for var, stats in demographic_stats.items():
@@ -201,8 +264,16 @@ def save_summary_report(analysis_results: Dict, similarity_metrics: Dict,
     
     # Cluster mapping
     report.append("ACOUSTIC-PERCEPTUAL CLUSTER MAPPING:")
-    for acoustic, perceptual in analysis_results['acoustic_to_perceptual_mapping'].items():
-        report.append(f"  Acoustic Cluster {acoustic} -> Perceptual Cluster {perceptual}")
+    mapping = analysis_results['acoustic_to_perceptual_mapping']
+    
+    if alignment_method == 'column_similarity' and 'similarity_matrix' in analysis_results:
+        similarity_matrix = analysis_results['similarity_matrix']
+        for acoustic, perceptual in mapping.items():
+            similarity_score = similarity_matrix[acoustic, perceptual]
+            report.append(f"  Acoustic Cluster {acoustic} -> Perceptual Cluster {perceptual} (similarity: {similarity_score:.4f})")
+    else:
+        for acoustic, perceptual in mapping.items():
+            report.append(f"  Acoustic Cluster {acoustic} -> Perceptual Cluster {perceptual}")
     report.append("")
     
     # Cross-modal similarity
@@ -259,27 +330,27 @@ def export_all_results(all_clusters: Dict, all_data: pd.DataFrame, first_acousti
     print("="*50)
     
     # Create output directories
-    os.makedirs(TABLES_DIR, exist_ok=True)
-    os.makedirs(RESULTS_DIR, exist_ok=True)
+    os.makedirs(config.TABLES_DIR, exist_ok=True)
+    os.makedirs(config.RESULTS_DIR, exist_ok=True)
     
     # Save demographic statistics
-    demo_path = f"{TABLES_DIR}/demographic_statistics.csv"
+    demo_path = f"{config.TABLES_DIR}/demographic_statistics.csv"
     save_demographic_stats(demographic_stats, demo_path)
     
     # Save cluster results
-    save_cluster_results(all_clusters, all_data, first_acoustic, TABLES_DIR)
+    save_cluster_results(all_clusters, all_data, first_acoustic, config.TABLES_DIR)
     
     # Save top features
-    save_top_features(top_features_dict, TABLES_DIR)
+    save_top_features(top_features_dict, config.TABLES_DIR)
     
     # Save cross-modal analysis results
-    save_cross_modal_results(analysis_results, similarity_metrics, RESULTS_DIR)
+    save_cross_modal_results(analysis_results, similarity_metrics, config.RESULTS_DIR)
     
     # Generate summary report
-    report_path = f"{RESULTS_DIR}/analysis_summary_report.txt"
+    report_path = f"{config.RESULTS_DIR}/analysis_summary_report.txt"
     save_summary_report(analysis_results, similarity_metrics, demographic_stats, report_path)
     
     print("\\nAll results exported successfully!")
-    print(f"Tables saved to: {TABLES_DIR}")
-    print(f"Results saved to: {RESULTS_DIR}")
+    print(f"Tables saved to: {config.TABLES_DIR}")
+    print(f"Results saved to: {config.RESULTS_DIR}")
     print(f"Plots saved to: {PLOTS_DIR}")

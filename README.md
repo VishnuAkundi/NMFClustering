@@ -149,7 +149,8 @@ all_clusters, all_feature_maps, coef_dists, basis_dists = run_nmf_clustering(
 ### Analysis Settings (config.py)
 - `ALSIBD_THRESHOLD = 25` - Threshold for severe vs mild classification
 - `NMF_RANK_RANGE = (2, 8)` - Range of cluster numbers to test
-- `TOP_N_FEATURES = 5` - Number of top features to extract per cluster
+- `TOP_N_FEATURES = "kneedle"` - Feature selection method: integer (e.g., 5) or "kneedle" for dynamic selection
+- `USE_VERSIONED_OUTPUTS = True` - Enable automatic output versioning (run1, run2, etc.)
 - `RANDOM_SEED = 1` - For reproducible results
 
 ### Data Filtering
@@ -177,7 +178,7 @@ If you use this code in your research, please cite:
 
 ## Contact
 
-For questions or issues, please contact the ALS Research Team.
+For questions or issues, please contact Vishnu Akundi.
 
 ## License
 

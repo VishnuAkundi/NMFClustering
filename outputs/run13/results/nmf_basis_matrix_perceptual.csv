@@ -1,0 +1,14 @@
+,Component_0,Component_1,Component_2,Component_3
+13. Strained Voice (excess vocal effort/hyperfunction),0.15739028200585878,0.5704092560928223,2.220446049250313e-16,1.0138929071199794
+17. Overall Dysphonia (global estimate of voice quality in speech),0.3027108118920498,0.6828061257996053,3.165465254162928e-08,1.7444186148472278
+19. Loudness Decay (speech becomes increasingly quiet when speaking; typically recovers after taking a breath) ,0.028905913209475602,1.3524368386314625,2.220446049250313e-16,2.220446049250313e-16
+"20. Reduced Loudness (overall speaking voice is unusually soft, quiet)",3.6793379753421955e-12,0.6684264433256023,2.220446049250313e-16,0.45236513125604466
+"21. Short Phrases (respiratory capacity is not sufficient for speech, leading to reduced number of words per phrase and/or frequent breaths which interrupt speech)  ",0.22243012879968824,0.6806653027191762,0.11765660019955813,1.8363298787423784e-12
+23. Monopitch and/or Monoloudness (speech lacks natural inflection patterns or loudness variation),1.0304134594582455,0.4784752839538379,0.2139620883430041,8.89899803364017e-12
+"24. Excess and Equal Stress (excessive effort/stress placed on most or all syllables, including function words such as 'if' 'the' 'and')",0.9256596622964732,2.220446049250313e-16,2.220446049250313e-16,2.220446049250313e-16
+25. Reduced Stress (overall reduced emphasis/energy in speech),1.0205562641947968e-07,1.134426442549071,0.7465251396728216,2.220446049250313e-16
+26. Overall Dysprosody (global estimate of reduced/impaired prosody and stress patterns) ,0.8930954492392874,0.6362033211672882,0.2761947604474683,0.08868824195077736
+27. Hypernasality (nasal quality related to excess air escape through velopharyngeal port),0.508613685852022,0.4731248382047573,0.7409902120197286,2.220446049250313e-16
+28. Imprecise Articulation (speech sounds slurred/ distorted) ,0.5808992996654061,0.3937455192429838,0.5594848570462126,0.2597830418315982
+29. Slow Articulation Rate (vowels and/or consonants are prolonged or articulated slowly),0.6138201739835287,3.2642904689667e-15,1.3094329846860906,0.27762270135183204
+"30. Reduced Overall Speaking Rate (based on total duration of passage reading, including articulation rate and pauses)",1.2356673017875206,2.771868403661645e-16,2.0751587310452106,0.17314790845367936

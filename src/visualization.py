@@ -15,10 +15,38 @@ from .config import *
 
 
 def setup_output_directories():
-    """Create output directories if they don't exist."""
+    """Create output directories, with versioning if enabled."""
     import os
-    for directory in [OUTPUT_DIR, PLOTS_DIR, TABLES_DIR, RESULTS_DIR]:
+    from . import config
+    
+    if USE_VERSIONED_OUTPUTS:
+        # Find the next available run number
+        run_number = 1
+        while os.path.exists(f"{OUTPUT_BASE_DIR}/run{run_number}"):
+            run_number += 1
+        
+        # Update config paths to use versioned directory
+        config.OUTPUT_DIR = f"{OUTPUT_BASE_DIR}/run{run_number}"
+        config.PLOTS_DIR = f"{config.OUTPUT_DIR}/plots"
+        config.TABLES_DIR = f"{config.OUTPUT_DIR}/tables"
+        config.RESULTS_DIR = f"{config.OUTPUT_DIR}/results"
+        
+        print(f"📁 Creating versioned output directory: run{run_number}")
+    
+    # Create all directories
+    for directory in [config.OUTPUT_DIR, config.PLOTS_DIR, config.TABLES_DIR, config.RESULTS_DIR]:
         os.makedirs(directory, exist_ok=True)
+        
+    print(f"📊 Output directories ready:")
+    print(f"   Plots: {config.PLOTS_DIR}")
+    print(f"   Tables: {config.TABLES_DIR}")
+    print(f"   Results: {config.RESULTS_DIR}")
+
+
+def show_plot_if_enabled():
+    """Show plot only if SHOW_PLOTS is enabled in config."""
+    if SHOW_PLOTS:
+        plt.show()
 
 
 def plot_kde(V: np.ndarray, ax: plt.Axes, colour: str = 'k', 
@@ -49,7 +77,8 @@ def plot_kde(V: np.ndarray, ax: plt.Axes, colour: str = 'k',
 
 
 def plot_pca_clusters(V: np.ndarray, clusters: np.ndarray, data_type: str, 
-                     save_path: str = None) -> None:
+                     save_path: str = None, original_data: np.ndarray = None, 
+                     zero_participants: pd.Index = None) -> None:
     """
     Create PCA visualization of clusters.
     
@@ -58,10 +87,57 @@ def plot_pca_clusters(V: np.ndarray, clusters: np.ndarray, data_type: str,
         clusters: Cluster assignments
         data_type: Type of data ("acoustic" or "perceptual")
         save_path: Path to save the plot
+        original_data: Original unscaled data matrix (for detecting all-zero perceptual data)
+        zero_participants: Either pd.Index of participant IDs or boolean mask for zero participants
     """
     # Create color mapping
     vectorized_func = np.vectorize(lambda x: CLUSTER_COLORS[x])
     string_array = vectorized_func(clusters)
+    
+    # Detect all-zero perceptual data if enabled and data_type is perceptual
+    zero_data_mask = None
+    if (data_type == "perceptual" and HIGHLIGHT_ZERO_PERCEPTUAL):
+        if zero_participants is not None:
+            # Check if zero_participants is a boolean mask or an index
+            if isinstance(zero_participants, (pd.Index, list, np.ndarray)) and len(zero_participants) > 0:
+                if isinstance(zero_participants, pd.Series) or hasattr(zero_participants, 'dtype'):
+                    # It's a boolean mask
+                    if zero_participants.dtype == bool:
+                        zero_data_mask = zero_participants.values if hasattr(zero_participants, 'values') else zero_participants
+                        print(f"Using boolean mask: {zero_data_mask.sum()} zero participants identified")
+                    else:
+                        # It's an index, convert to boolean mask by checking original data
+                        if original_data is not None:
+                            epsilon_threshold = 1e-9
+                            row_sums = np.sum(original_data, axis=1)
+                            zero_data_mask = row_sums < epsilon_threshold
+                            print(f"Converted index to mask: {zero_data_mask.sum()} zero participants detected")
+                else:
+                    # It's an index or list, convert to boolean mask
+                    if original_data is not None:
+                        epsilon_threshold = 1e-9
+                        row_sums = np.sum(original_data, axis=1)
+                        zero_data_mask = row_sums < epsilon_threshold
+                        print(f"Using index with {len(zero_participants)} participants, detected {zero_data_mask.sum()} zero rows")
+            elif hasattr(zero_participants, 'dtype') and zero_participants.dtype == bool:
+                # It's already a boolean mask
+                zero_data_mask = zero_participants
+                print(f"Using provided boolean mask: {zero_data_mask.sum()} zero participants")
+            else:
+                print(f"DEBUG: zero_participants type: {type(zero_participants)}, length: {len(zero_participants) if hasattr(zero_participants, '__len__') else 'N/A'}")
+                
+        elif original_data is not None:
+            # Fallback: Identify rows that are all zeros (or effectively zero) from original data
+            zero_threshold = 1e-9  # Relaxed threshold to catch near-zero values after preprocessing
+            row_sums = np.sum(original_data, axis=1)
+            zero_data_mask = row_sums < zero_threshold
+            
+            if zero_data_mask.sum() > 0:
+                print(f"Highlighting {zero_data_mask.sum()} participants with all-zero perceptual data (auto-detected)")
+        else:
+            print(f"DEBUG: No zero participants info or original data provided for perceptual highlighting")
+    else:
+        pass  # Not checking for zero data for acoustic or when highlighting is disabled
     
     # Plot the clustering with PCA visualization
     fig, ax = plt.subplots(1, 1, figsize=PCA_FIGURE_SIZE)
@@ -70,23 +146,68 @@ def plot_pca_clusters(V: np.ndarray, clusters: np.ndarray, data_type: str,
     
     ax.axvline(0, c="grey", ls=":")
     ax.axhline(0, c="grey", ls=":")
-    ax.scatter(pca_out[:, 0], pca_out[:, 1], c=string_array[0])
+    
+    # Plot regular data points
+    if zero_data_mask is not None:
+        # Plot non-zero data points
+        non_zero_mask = ~zero_data_mask
+        ax.scatter(pca_out[non_zero_mask, 0], pca_out[non_zero_mask, 1], 
+                  c=string_array[0][non_zero_mask], alpha=0.8, s=60)
+        
+        # Plot zero data points with special highlighting
+        if zero_data_mask.sum() > 0:
+            ax.scatter(pca_out[zero_data_mask, 0], pca_out[zero_data_mask, 1], 
+                      c=string_array[0][zero_data_mask], alpha=0.8, s=60, 
+                      edgecolors='black', linewidths=2, marker='s',
+                      label='All-zero perceptual data')
+    else:
+        # Plot all data points normally
+        ax.scatter(pca_out[:, 0], pca_out[:, 1], c=string_array[0], alpha=0.8, s=60)
     
     # Add KDE contours for each cluster
     lim = 0.5  # Visual scale of KDE plot
     for c in np.unique(clusters[0]):
         plot_kde(pca_out[clusters[0] == c, :], ax=ax, colour=CLUSTER_COLORS[c], 
                 label=None, limits=lim)
+    #font size = 15 for both x and y labels
+    ax.set_xlabel('PCA component 1 (visualization only)', fontsize=30)
+    ax.set_ylabel('PCA component 2 (visualization only)', fontsize=30)
+    title = f'Cluster Visualization - {data_type.capitalize()} Data (PCA with NMF coloring)'
+    if zero_data_mask is not None and zero_data_mask.sum() > 0:
+        title += f'\n({zero_data_mask.sum()} all-zero data points highlighted with squares)'
+    ax.set_title(title, fontsize=35)
     
-    ax.set_xlabel('PCA component 1 (visualization only)')
-    ax.set_ylabel('PCA component 2 (visualization only)')
-    ax.set_title(f'Cluster Visualization - {data_type.capitalize()} Data (PCA with NMF coloring)')
-    
+    #Set x and y tick font sizes
+    ax.tick_params(axis='x', labelsize=25)
+    ax.tick_params(axis='y', labelsize=25)
+    # Short label for legend based on modality
+    cluster_prefix = "A" if data_type == "acoustic" else "P"
+
     # Create legend
-    handles = [plt.Line2D([0], [0], marker='o', color='w', 
-                         markerfacecolor=CLUSTER_COLORS[c], markersize=10, 
-                         label=f"Cluster {c}") for c in np.unique(clusters[0])]
-    ax.legend(handles=handles, loc="upper right")
+    # handles = [plt.Line2D([0], [0], marker='o', color='w', 
+    #                      markerfacecolor=CLUSTER_COLORS[c], markersize=10, 
+    #                      label=f"Cluster {c}") for c in np.unique(clusters[0])]
+    handles = [
+        plt.Line2D(
+            [0], [0],
+            marker='o',
+            color='w',
+            markerfacecolor=CLUSTER_COLORS[c],
+            markersize=10,
+            label=f"{cluster_prefix}{c}"
+        )
+        for c in np.unique(clusters[0])
+    ]
+
+    
+    # Add legend entry for all-zero data points if they exist
+    if zero_data_mask is not None and zero_data_mask.sum() > 0:
+        handles.append(plt.Line2D([0], [0], marker='s', color='w', 
+                                 markerfacecolor='gray', markeredgecolor='black',
+                                 markeredgewidth=2, markersize=10, 
+                                 label='All-zero perceptual data'))
+    
+    ax.legend(handles=handles, loc="upper right", fontsize=30)
     
     plt.tight_layout()
     
@@ -94,7 +215,7 @@ def plot_pca_clusters(V: np.ndarray, clusters: np.ndarray, data_type: str,
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"PCA plot saved: {save_path}")
     
-    plt.show()
+    show_plot_if_enabled()
 
 
 def plot_cluster_distributions(clusters: np.ndarray, clinical_summaries: pd.DataFrame, 
@@ -109,71 +230,117 @@ def plot_cluster_distributions(clusters: np.ndarray, clinical_summaries: pd.Data
         save_dir: Directory to save plots
     """
     from collections import Counter
-    
+    from matplotlib.colors import LinearSegmentedColormap
+
+
     # Compute overall cluster counts
     counts = Counter(clusters[0])
     categories = list(counts.keys())
     values = list(counts.values())
-    
+
     # Compute counts of severe participants per cluster
     severe_mask = clinical_summaries["ALSIBD Total Score (calculated)"] > ALSIBD_THRESHOLD
     severe_clusters = clusters[0][severe_mask]
     counts_severe = Counter(severe_clusters)
     categories_severe = list(counts_severe.keys())
     values_severe = list(counts_severe.values())
-    
+
+    # Custom purple and green gradient palettes
+
+    # Purple gradient for cluster distribution
+    purple_cmap = LinearSegmentedColormap.from_list("purple_grad", ["#b39ddb", "#512da8"], N=len(categories))
+    bar_colors = [purple_cmap(i / max(len(categories)-1, 1)) for i in range(len(categories))]
+
+    # Green gradient for severe participants
+    green_cmap = LinearSegmentedColormap.from_list("green_grad", ["#a5d6a7", "#388e3c"], N=len(categories_severe))
+    bar_colors_severe = [green_cmap(i / max(len(categories_severe)-1, 1)) for i in range(len(categories_severe))]
+
     # Bar plot 1: Cluster size distribution
     plt.figure(figsize=BAR_FIGURE_SIZE)
-    plt.bar(categories, np.array(values) / len(clusters[0]), color='dodgerblue')
-    plt.xlabel("Cluster ID")
-    plt.ylabel("Proportion of Participants")
-    plt.title(f"Distribution of Participants Across Clusters - {data_type.capitalize()}")
+    cluster_proportions = np.array(values) / len(clusters[0])
+    bars = plt.bar(categories, cluster_proportions, color=bar_colors)
+    plt.xlabel("Cluster ID", fontsize=25)
+    plt.ylabel("Proportion of Participants", fontsize=25)
+    plt.title(f"Distribution of Participants Across Clusters - {data_type.capitalize()}", fontsize=28)
     plt.ylim(0, 1)
+    plt.xticks(categories, fontsize=22)
+    plt.yticks(fontsize=22)
     plt.grid(axis='y', linestyle=':', alpha=0.5)
     plt.tight_layout()
-    
+
+    # Add counts above bars
+    for bar, count in zip(bars, values):
+        plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02, str(count),
+                 ha='center', va='bottom', fontsize=22, fontweight='bold')
+
     if save_dir:
         save_path = f"{save_dir}/cluster_distribution_{data_type}.png"
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Cluster distribution plot saved: {save_path}")
-    
-    plt.show()
-    
+        
+        # Save cluster distribution percentages to CSV
+        cluster_dist_df = pd.DataFrame({
+            'cluster_id': categories,
+            'count': values,
+            'proportion': cluster_proportions
+        })
+        csv_path = f"{save_dir}/cluster_distribution_{data_type}.csv"
+        cluster_dist_df.to_csv(csv_path, index=False)
+        print(f"Cluster distribution data saved: {csv_path}")
+
+    show_plot_if_enabled()
+
     # Bar plot 2: Severe participants per cluster (global proportion)
     plt.figure(figsize=BAR_FIGURE_SIZE)
-    plt.bar(categories_severe, np.array(values_severe) / len(clusters[0]), color='firebrick')
-    plt.xlabel("Cluster ID")
-    plt.ylabel("Proportion of All Participants")
-    plt.title(f"Severe Participants per Cluster - {data_type.capitalize()} (Global Proportion)")
+    severe_proportions = np.array(values_severe) / len(clusters[0])
+    bars_severe = plt.bar(categories_severe, severe_proportions, color=bar_colors_severe)
+    plt.xlabel("Cluster ID", fontsize=20)
+    plt.ylabel("Proportion of All Participants", fontsize=20)
+    plt.title(f"Severe Participants per Cluster - {data_type.capitalize()} (Global Proportion)", fontsize=20)
     plt.ylim(0, 1)
+    plt.xticks(categories_severe, fontsize=20)
+    plt.yticks(fontsize=20)
     plt.grid(axis='y', linestyle=':', alpha=0.5)
     plt.tight_layout()
-    
+
+    # Add counts above bars
+    for bar, count in zip(bars_severe, values_severe):
+        plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02, str(count),
+                 ha='center', va='bottom', fontsize=22, fontweight='bold')
+
     if save_dir:
         save_path = f"{save_dir}/severe_global_{data_type}.png"
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Severe participants plot saved: {save_path}")
-    
-    plt.show()
-    
+
+    show_plot_if_enabled()
+
     # Bar plot 3: Severity ratio within each cluster
     if categories_severe:  # Only plot if there are severe participants
         within_cluster_ratios = np.array(values_severe) / np.array([counts[c] for c in categories_severe])
+        bars_within = None
         plt.figure(figsize=BAR_FIGURE_SIZE)
-        plt.bar(categories_severe, within_cluster_ratios, color='orange')
-        plt.xlabel("Cluster ID")
-        plt.ylabel("Proportion of Cluster That Is Severe")
-        plt.title(f"Severity Percentage Within Each Cluster - {data_type.capitalize()}")
+        bars_within = plt.bar(categories_severe, within_cluster_ratios, color=bar_colors_severe)
+        plt.xlabel("Cluster ID", fontsize=28)
+        plt.ylabel("Proportion of Cluster That Is Severe", fontsize=28)
+        plt.title(f"Severity Percentage Within Each Cluster - {data_type.capitalize()}", fontsize=28)
         plt.ylim(0, 1)
+        plt.xticks(categories_severe, fontsize=28)
+        plt.yticks(fontsize=28)
         plt.grid(axis='y', linestyle=':', alpha=0.5)
         plt.tight_layout()
-        
+
+        # Add counts above bars
+        for bar, count in zip(bars_within, values_severe):
+            plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02, str(count),
+                     ha='center', va='bottom', fontsize=28, fontweight='bold')
+
         if save_dir:
             save_path = f"{save_dir}/severity_within_cluster_{data_type}.png"
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
             print(f"Within-cluster severity plot saved: {save_path}")
-        
-        plt.show()
+
+        show_plot_if_enabled()
 
 
 def plot_feature_importance(basis_dists: Dict, all_data: pd.DataFrame, 
@@ -207,12 +374,14 @@ def plot_feature_importance(basis_dists: Dict, all_data: pd.DataFrame,
             all_features = basis_df.iloc[:, cluster_idx].sort_values(ascending=False)
             feature_names = all_features.index
             
-            # Clean perceptual feature names by removing parenthetical content
+            # Clean perceptual feature names for better display
             if data_type == "perceptual":
-                feature_names = [re.sub(r"\\(.*\\)", "", feat).strip() for feat in all_features.index]
+                display_names = clean_perceptual_feature_names(list(all_features.index))
+            else:
+                display_names = list(feature_names)
             
             # Plot
-            plt.bar(feature_names, all_features.values, 
+            plt.bar(display_names, all_features.values, 
                    color=[color_palette(i) for i in range(len(all_features))])
             plt.title(f"Feature Importances - Cluster {cluster_idx} ({data_type.capitalize()} Data)")
             plt.xlabel("Feature Names")
@@ -225,8 +394,8 @@ def plot_feature_importance(basis_dists: Dict, all_data: pd.DataFrame,
                 save_path = f"{save_dir}/feature_importance_{data_type}_cluster_{cluster_idx}.png"
                 plt.savefig(save_path, dpi=300, bbox_inches='tight')
                 print(f"Feature importance plot saved: {save_path}")
-            
-            plt.show()
+
+            show_plot_if_enabled()
 
 
 def plot_confusion_matrix(perceptual_clusters_df: pd.DataFrame, 
@@ -266,9 +435,9 @@ def plot_confusion_matrix(perceptual_clusters_df: pd.DataFrame,
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Confusion matrix saved: {save_path}")
-    
-    plt.show()
-    
+
+    show_plot_if_enabled()
+
     # Calculate Cramer's V for association strength
     cramers_v = association(observed[:4, :], method="cramer")
     print(f"Cramer's V: {cramers_v:.4f}")
@@ -317,8 +486,108 @@ def plot_similarity_distributions(js_divs: np.ndarray, cos_sims: np.ndarray,
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Similarity distributions plot saved: {save_path}")
+
+    show_plot_if_enabled()
+
+
+def clean_perceptual_feature_names(feature_names: list) -> list:
+    """
+    Clean perceptual feature names by removing number prefixes and parenthetical content.
     
-    plt.show()
+    Args:
+        feature_names: List of feature names to clean
+        
+    Returns:
+        List of cleaned feature names
+    """
+    cleaned_names = []
+    for feat in feature_names:
+        # Remove everything after the opening bracket
+        if "(" in feat:
+            cleaned = feat.split("(")[0].strip()
+        else:
+            cleaned = feat.strip()
+        
+        # Remove number and dot prefix (like "13. ")
+        if ". " in cleaned:
+            cleaned = cleaned.split(". ", 1)[1]
+        
+        cleaned_names.append(cleaned)
+    
+    return cleaned_names
+
+
+def visualize_cluster_feature_statistics(cluster_idx: int, feature_names: list, means: np.ndarray, 
+                                        stds: np.ndarray, medians: np.ndarray, q1: np.ndarray, 
+                                        q3: np.ndarray, data_type: str, save_path: str = None) -> None:
+    """
+    Create statistical summary plot for cluster features.
+    
+    Args:
+        cluster_idx: Cluster index
+        feature_names: Names of features
+        means: Mean values
+        stds: Standard deviations
+        medians: Median values
+        q1: First quartile values
+        q3: Third quartile values
+        data_type: Type of data
+        save_path: Path to save the plot
+    """
+    # Clean perceptual feature names for better display
+    if data_type == "perceptual":
+        display_names = clean_perceptual_feature_names(feature_names)
+    else:
+        display_names = feature_names
+    
+    plt.figure(figsize=(10, 6))
+    plt.bar(display_names, means, yerr=stds, capsize=5, label='Mean ± Std')
+    plt.scatter(display_names, medians, color='orange', label='Median', s=50)
+    plt.scatter(display_names, q1, color='green', marker='x', label='Q1', s=50)
+    plt.scatter(display_names, q3, color='red', marker='x', label='Q3', s=50)
+    plt.ylabel("Feature Values")
+    plt.legend()
+    plt.title(f"Feature Statistics - Cluster {cluster_idx} ({data_type.capitalize()} Data)")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Cluster feature statistics saved: {save_path}")
+
+    show_plot_if_enabled()
+
+
+def visualize_cluster_feature_importance(cluster_idx: int, feature_names: list, scores: np.ndarray, 
+                                       data_type: str, save_path: str = None) -> None:
+    """
+    Create feature importance plot for a specific cluster.
+    
+    Args:
+        cluster_idx: Cluster index
+        feature_names: Names of features
+        scores: Importance scores
+        data_type: Type of data
+        save_path: Path to save the plot
+    """
+    # Clean perceptual feature names for better display
+    if data_type == "perceptual":
+        display_names = clean_perceptual_feature_names(feature_names)
+    else:
+        display_names = feature_names
+    
+    plt.figure(figsize=(10, 6))
+    plt.bar(display_names, scores, color='skyblue')
+    plt.ylabel("Importance Scores")
+    plt.title(f"Feature Importance - Cluster {cluster_idx} ({data_type.capitalize()} Data)")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Cluster feature importance saved: {save_path}")
+
+    show_plot_if_enabled()
 
 
 def visualize_cluster_features(cluster_idx: int, feature_names: list, means: np.ndarray, 
@@ -327,6 +596,7 @@ def visualize_cluster_features(cluster_idx: int, feature_names: list, means: np.
                              save_path: str = None) -> None:
     """
     Create detailed feature analysis plots for a specific cluster.
+    DEPRECATED: Use visualize_cluster_feature_statistics and visualize_cluster_feature_importance instead.
     
     Args:
         cluster_idx: Cluster index
@@ -340,34 +610,16 @@ def visualize_cluster_features(cluster_idx: int, feature_names: list, means: np.
         data_type: Type of data
         save_path: Path to save the plot
     """
-    # Clean perceptual feature names
-    if data_type == "perceptual":
-        feature_names = [re.sub(r"\\(.*\\)", "", feat).strip() for feat in feature_names]
+    print("⚠️  visualize_cluster_features is deprecated. Use separate functions instead.")
     
-    fig, axes = plt.subplots(2, 1, figsize=CLUSTER_FEATURE_SIZE)
-    fig.suptitle(f"Feature Analysis - Cluster {cluster_idx} ({data_type.capitalize()} Data)", 
-                fontsize=16)
-    
-    # Plot statistical summary
-    axes[0].bar(feature_names, means, yerr=stds, capsize=5, label='Mean ± Std')
-    axes[0].scatter(feature_names, medians, color='orange', label='Median', s=50)
-    axes[0].scatter(feature_names, q1, color='green', marker='x', label='Q1', s=50)
-    axes[0].scatter(feature_names, q3, color='red', marker='x', label='Q3', s=50)
-    axes[0].set_ylabel("Feature Values")
-    axes[0].legend()
-    axes[0].set_title("Statistical Summary of Features")
-    axes[0].tick_params(axis='x', rotation=45)
-    
-    # Plot importance scores
-    axes[1].bar(feature_names, scores, color='skyblue')
-    axes[1].set_ylabel("Importance Scores")
-    axes[1].set_title("Feature Importance Scores")
-    axes[1].tick_params(axis='x', rotation=45)
-    
-    plt.tight_layout()
-    
+    # For backward compatibility, create both plots with modified save paths
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        print(f"Cluster feature analysis saved: {save_path}")
-    
-    plt.show()
+        base_path = save_path.replace('.png', '')
+        stats_path = f"{base_path}_statistics.png"
+        importance_path = f"{base_path}_importance.png"
+        
+        visualize_cluster_feature_statistics(cluster_idx, feature_names, means, stds, medians, q1, q3, data_type, stats_path)
+        visualize_cluster_feature_importance(cluster_idx, feature_names, scores, data_type, importance_path)
+    else:
+        visualize_cluster_feature_statistics(cluster_idx, feature_names, means, stds, medians, q1, q3, data_type)
+        visualize_cluster_feature_importance(cluster_idx, feature_names, scores, data_type)

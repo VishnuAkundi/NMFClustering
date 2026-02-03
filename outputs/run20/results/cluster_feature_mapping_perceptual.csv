@@ -1,0 +1,14 @@
+Cluster_ID,Feature_Name
+0,Monopitchand/orMonoloudness
+0,ExcessandEqualStress
+0,OverallDysprosody
+0,ImpreciseArticulation
+1,LoudnessDecay
+1,ReducedLoudness
+1,ShortPhrases
+1,ReducedStress
+2,Hypernasality
+2,SlowArticulationRate
+2,ReducedOverallSpeakingRate
+3,StrainedVoice
+3,OverallDysphonia

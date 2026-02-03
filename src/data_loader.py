@@ -6,7 +6,55 @@ import pandas as pd
 import numpy as np
 import glob
 from typing import Tuple, Dict
-from .config import *
+
+try:
+    from .config import *
+except ImportError:
+    from config import *
+
+
+def handle_zero_perceptual_data(perceptual_data: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Index]:
+    """
+    Handle all-zero perceptual data by adding small epsilon values.
+    
+    This addresses the mathematical issue where NMF cannot process all-zero rows,
+    while preserving the clinical meaning of "healthy" participants with no symptoms.
+    
+    Args:
+        perceptual_data: DataFrame with perceptual ratings
+        
+    Returns:
+        Tuple of (processed_data, zero_participants_index):
+            - processed_data: DataFrame with epsilon added to all-zero rows (if HANDLE_ZERO_PERCEPTUAL=True)
+            - zero_participants_index: Index of participants who were originally all-zero (always identified)
+    """
+    processed_data = perceptual_data.copy()
+    
+    # Always identify rows that are all zeros (or effectively zero) for visualization purposes
+    zero_threshold = 1e-12  # Very small threshold to catch near-zero values
+    row_sums = processed_data.sum(axis=1)
+    zero_rows = row_sums < zero_threshold
+    zero_participants_index = processed_data.index[zero_rows]
+    
+    if zero_rows.sum() > 0:
+        print(f"Found {zero_rows.sum()} participants with all-zero perceptual ratings")
+        
+        if HANDLE_ZERO_PERCEPTUAL:
+            print(f"Adding epsilon ({PERCEPTUAL_EPSILON}) to preserve them as 'healthy' reference group")
+            
+            # Add small epsilon to all features for zero rows
+            # This represents "virtually no symptoms" rather than "no data"
+            processed_data.loc[zero_rows, :] = PERCEPTUAL_EPSILON
+            
+            # Log which participants were affected
+            affected_participants = zero_participants_index.tolist()
+            print(f"Participants treated as 'healthy' baseline: {affected_participants[:5]}{'...' if len(affected_participants) > 5 else ''}")
+        else:
+            print(f"Zero participants identified for visualization highlighting (HANDLE_ZERO_PERCEPTUAL=False)")
+            affected_participants = zero_participants_index.tolist()
+            print(f"Zero participants: {affected_participants[:5]}{'...' if len(affected_participants) > 5 else ''}")
+    
+    return processed_data, zero_participants_index
 
 
 def load_acoustic_features() -> pd.DataFrame:
@@ -41,7 +89,7 @@ def load_acoustic_features() -> pd.DataFrame:
     return all_results
 
 
-def load_perceptual_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
+def load_perceptual_data() -> Tuple[pd.DataFrame, pd.DataFrame, pd.Index]:
     """
     Load and preprocess perceptual ratings data.
     
@@ -62,9 +110,12 @@ def load_perceptual_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
     drop_cols = [any(np.isnan(perceptual[c].values)) or ("calculated" in c) for c in perceptual.columns]
     perceptual.drop(perceptual.columns[drop_cols], inplace=True, axis=1)
     
+    # Handle all-zero perceptual data (healthy participants)
+    perceptual, zero_perceptual_participants = handle_zero_perceptual_data(perceptual)
+    
     print(f"Loaded perceptual data: {perceptual.shape[0]} participants, {perceptual.shape[1]} features")
     
-    return perceptual, clinical_summaries
+    return perceptual, clinical_summaries, zero_perceptual_participants
 
 
 def load_demographics() -> pd.DataFrame:
@@ -84,7 +135,7 @@ def load_demographics() -> pd.DataFrame:
     return demographics
 
 
-def merge_all_data() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, int]:
+def merge_all_data() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, int, pd.Index]:
     """
     Load and merge all data sources.
     
@@ -94,10 +145,11 @@ def merge_all_data() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, int]:
         - clinical_summaries: clinical summary scores
         - demographics: merged demographics with all data
         - first_acoustic: index of first acoustic feature column
+        - zero_perceptual_participants: participants who were originally all-zero perceptual
     """
     # Load individual datasets
     acoustic_data = load_acoustic_features()
-    perceptual_data, clinical_summaries = load_perceptual_data()
+    perceptual_data, clinical_summaries, zero_perceptual_participants = load_perceptual_data()
     demographics_data = load_demographics()
     
     # Merge perceptual and acoustic data
@@ -110,7 +162,7 @@ def merge_all_data() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, int]:
     print(f"Final merged dataset: {all_data.shape[0]} participants, {all_data.shape[1]} features")
     print(f"First acoustic feature at column {first_acoustic}")
     
-    return all_data, clinical_summaries, demographics_merged, first_acoustic
+    return all_data, clinical_summaries, demographics_merged, first_acoustic, zero_perceptual_participants
 
 
 def filter_demographics(demographics: pd.DataFrame, clinical_summaries: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:

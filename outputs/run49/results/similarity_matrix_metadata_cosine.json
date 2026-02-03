@@ -1,0 +1,13 @@
+{
+  "alignment_method": "column_similarity",
+  "similarity_metric": "cosine",
+  "matrix_shape": [
+    4,
+    4
+  ],
+  "matrix_range": [
+    0.2562307004695375,
+    0.6532206640756347
+  ],
+  "description": "C[i,j] = cosine similarity between acoustic component i and perceptual component j, computed over shared patients"
+}
