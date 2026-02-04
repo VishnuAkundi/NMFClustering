@@ -9,7 +9,7 @@ import os
 BASE_DIR = "C:/Users/akundivi/Desktop/Acoustic_Pipeline_New/VirtualSLP-analytics/Clustering"
 
 # Data paths
-ACOUSTIC_FEATURES_PATH = f"{BASE_DIR}/WavFilesConvertedALL441k/Features/*.csv"
+ACOUSTIC_FEATURES_PATH = f"{BASE_DIR}/WavFilesConvertedALL441k/ALLFeatures/*.csv"
 PERCEPTUAL_DATA_PATH = f"{BASE_DIR}/Data/perceptual_ratings_final_short.csv"
 DEMOGRAPHICS_PATH = f"{BASE_DIR}/Data/ALSDemographics.csv"
 

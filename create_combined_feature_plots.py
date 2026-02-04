@@ -485,7 +485,7 @@ perceptual_colors = {
 
 acoustic_features = {
     "Articulatory": [
-        "f1_d_dx_median", "f1_d_dx_prc_5","f1_d_dx_prc_95","f1_d_dx_prc_5_95",
+        'f1', 'f2', "f1_d_dx_median", "f1_d_dx_prc_5","f1_d_dx_prc_95","f1_d_dx_prc_5_95",
         "f2_d_dx_median","f2_d_dx_prc_5","f2_d_dx_prc_95","f2_d_dx_prc_5_95",
         "F1_F2_comp",
         "speech_dur","mean_phrase_dur","cv_phrase_dur", "speech_rate","total_dur"
@@ -496,7 +496,7 @@ acoustic_features = {
         "fft_peaks1","fft_peaks2","fft_ampli1","fft_ampli2",
         "nrj_below_boundary","nrj_above_boundary","nrj_3_6","ratio_below_above"
     ],
-    'Resonatory': ['f1', 'f2', 'f1_bw', 'f2_bw']  # Added resonatory features for completeness
+    'Resonatory': ['F1width', 'f2_bw', 'A1P1', 'A1P1comp', 'P1amp']  # Added resonatory features for completeness
 }
 
 acoustic_colors = {

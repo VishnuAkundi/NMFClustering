@@ -1,0 +1,9 @@
+Data_Type,Cluster_ID,Participant_Count,Median_ALSIBD,Q1_ALSIBD,Q3_ALSIBD
+perceptual,0,34,3.0,1.0,29.0
+perceptual,1,16,42.5,32.5,48.75
+perceptual,2,15,12.0,9.0,24.5
+perceptual,3,11,18.0,10.0,26.0
+acoustic,0,30,3.0,1.0,12.75
+acoustic,1,15,34.0,22.5,58.0
+acoustic,2,15,31.0,9.5,42.0
+acoustic,3,16,32.5,16.25,46.25

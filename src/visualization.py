@@ -342,6 +342,106 @@ def plot_cluster_distributions(clusters: np.ndarray, clinical_summaries: pd.Data
 
         show_plot_if_enabled()
 
+def plot_cluster_feature_distributions(all_data: pd.DataFrame, 
+                                       clusters: Dict[str, np.ndarray],
+                                       first_acoustic: int,
+                                       save_dir: str = None) -> None:
+    """
+    Create distribution plots for ALL features in each cluster, for both modalities.
+    
+    For each cluster and each of its features, plots the distribution of feature values
+    across all participants assigned to that cluster.
+    
+    Args:
+        all_data: Combined dataset with all features
+        clusters: Dictionary with 'acoustic' and 'perceptual' cluster assignments
+        first_acoustic: Index of first acoustic feature column
+        save_dir: Directory to save plots
+    """
+    if save_dir:
+        dist_dir = f"{save_dir}/feature_distributions_by_cluster"
+        os.makedirs(dist_dir, exist_ok=True)
+    
+    for data_type in ["acoustic", "perceptual"]:
+        cluster_assignments = clusters[data_type]
+        
+        # Handle 2D array (from NMF) - take first row if needed
+        if cluster_assignments.ndim > 1:
+            cluster_assignments = cluster_assignments[0]
+        
+        # Get feature columns for this modality
+        if data_type == "acoustic":
+            feature_data = all_data.iloc[:, first_acoustic:]
+        else:
+            feature_data = all_data.iloc[:, :first_acoustic]
+        
+        # Create subdirectory for this modality
+        if save_dir:
+            modality_dir = f"{dist_dir}/{data_type}"
+            os.makedirs(modality_dir, exist_ok=True)
+        
+        # Get number of clusters
+        n_clusters = len(np.unique(cluster_assignments))
+        all_feature_names = list(feature_data.columns)
+        
+        print(f"\nPlotting {len(all_feature_names)} features for {data_type} data across {n_clusters} clusters")
+        
+        # For each cluster
+        for cluster_idx in range(n_clusters):
+            # Get participants in this cluster
+            cluster_mask = (cluster_assignments == cluster_idx)
+            n_participants = cluster_mask.sum()
+            
+            # Create cluster subdirectory
+            if save_dir:
+                cluster_dir = f"{modality_dir}/cluster_{cluster_idx}"
+                os.makedirs(cluster_dir, exist_ok=True)
+            
+            print(f"  Cluster {cluster_idx}: {len(all_feature_names)} features, {n_participants} participants")
+            
+            # For each feature in this cluster
+            for feature_name in all_feature_names:
+                if feature_name not in feature_data.columns:
+                    print(f"    Warning: Feature '{feature_name}' not found in data")
+                    continue
+                
+                # Get feature values for participants in this cluster
+                feature_values = feature_data.loc[cluster_mask, feature_name].values
+                
+                # Create distribution plot
+                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+                
+                # Histogram
+                ax1.hist(feature_values, bins=20, edgecolor='black', alpha=0.7, color='skyblue')
+                ax1.set_xlabel('Feature Value')
+                ax1.set_ylabel('Frequency')
+                ax1.set_title(f'Histogram: {feature_name}')
+                ax1.grid(axis='y', linestyle='--', alpha=0.6)
+                
+                # Violin plot (showing distribution shape)
+                parts = ax2.violinplot([feature_values], positions=[0], showmeans=True, showmedians=True)
+                ax2.set_ylabel('Feature Value')
+                ax2.set_title(f'Violin Plot: {feature_name}')
+                ax2.set_xticks([])
+                ax2.grid(axis='y', linestyle='--', alpha=0.6)
+                
+                # Add statistics text
+                stats_text = f'n={n_participants}\nmean={np.mean(feature_values):.3f}\nmedian={np.median(feature_values):.3f}\nstd={np.std(feature_values):.3f}'
+                ax2.text(0.5, 0.95, stats_text, transform=ax2.transAxes,
+                        verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+                
+                # Overall title
+                fig.suptitle(f'{data_type.capitalize()} - Cluster {cluster_idx} - {feature_name}', 
+                           fontsize=12, fontweight='bold')
+                plt.tight_layout()
+                
+                if save_dir:
+                    # Clean feature name for filename
+                    clean_name = feature_name.replace('/', '_').replace(' ', '_').replace('(', '').replace(')', '')
+                    save_path = f"{cluster_dir}/{clean_name}.png"
+                    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+                
+                show_plot_if_enabled()
 
 def plot_feature_importance(basis_dists: Dict, all_data: pd.DataFrame, 
                           first_acoustic: int, save_dir: str = None) -> None:

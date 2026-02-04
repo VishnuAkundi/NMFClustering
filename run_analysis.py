@@ -197,6 +197,10 @@ def main():
         # Feature importance plots
         plot_feature_importance(basis_dists, all_data, first_acoustic, config.PLOTS_DIR)
         
+        # Feature distribution plots for all features in each cluster
+        from src.visualization import plot_cluster_feature_distributions
+        plot_cluster_feature_distributions(all_data, all_clusters, first_acoustic, config.PLOTS_DIR)
+        
         print("✓ Basic visualizations completed")
         print()
         
